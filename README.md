@@ -1,4 +1,4 @@
-# Udyam Digital — prototype (Accel YTL Hackathon, Track A)
+# Udyam Digital
 
 A small business goes from **GSTIN → needs → quote → documents → live tracking** online in one session, with no sales visit. A salesperson can also run the same flow on the customer's behalf.
 
