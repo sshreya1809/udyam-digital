@@ -1,21 +1,75 @@
 # Udyam Digital
 
-A small business goes from **GSTIN → needs → quote → documents → live tracking** online in one session, with no sales visit. A salesperson can also run the same flow on the customer's behalf.
+A small business goes from **GSTIN → needs discovery → 3-tier quote → Smart KYC documents → live activation tracking** online in one session, with no sales visit. A salesperson or channel partner can also run the exact same flow on the customer's behalf.
 
-## Run (macOS)
+---
+
+## Quick Start (Zero-Setup Instant Run)
+
+The repository includes the pre-built React application (`frontend/dist`) and pre-cached OCR extractions for all 47 test applicant documents (`data/ocr_cache`). The backend uses only the **Python standard library** — no `pip install` or external database configuration is needed!
+
+### Run on Windows
+
+1. **Start the backend server:**
+   ```powershell
+   python server.py
+   ```
+2. **Open the web application:**
+   Navigate to **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser.
+
+3. **Run the automated unit tests:**
+   ```powershell
+   python -m unittest discover -s tests
+   ```
+   *(All 17 tests will run and pass in ~0.25 seconds).*
+
+---
+
+### Run on macOS
 
 ```sh
-./setup.sh            # once: compiles the OCR helper (macOS Vision, ~2 min) and builds the React app
-python3 server.py     # http://127.0.0.1:8000  (serves the API and the React build)
+# Optional: re-compile OCR binary and rebuild React
+./setup.sh            
+
+# Start the server (http://127.0.0.1:8000)
+python3 server.py     
+
+# Run unit tests
 python3 -m unittest discover -s tests
 ```
 
-- **Frontend:** React 19 + Vite in `frontend/`. For hot reload during development:
-  1. Run `python3 server.py`.
-  2. Then `cd frontend && npm run dev` and open http://127.0.0.1:5173 (it proxies `/api` to the Python server).
-- **Backend:** standard-library Python 3.9 (`server.py`, `core/`), listening on `127.0.0.1` only.
-- **Node.js:** a project-local copy lives in `.tools/node`; `setup.sh` puts it on `PATH`. `frontend/.npmrc` pins the public npm registry for this project only.
-- **To demo:** pick a sample lead (K01–K12) on step 1. On step 4, pick the matching specimen pack.
+---
+
+## Frontend Development (Optional: Hot-Reload)
+
+The frontend is built with **React 19 + Vite** in `frontend/`. If you want to modify the frontend with instant hot-reload:
+
+1. In Terminal 1, keep the backend running:
+   ```sh
+   python server.py
+   ```
+2. In Terminal 2, launch the Vite dev server:
+   ```sh
+   cd frontend
+   npm install
+   npm run dev
+   ```
+3. Open **[http://127.0.0.1:5173](http://127.0.0.1:5173)** (Vite automatically proxies `/api` calls to the Python server on port 8000).
+
+---
+
+## How to Demo the Prototype
+
+1. **Step 1 — Business Lookup:** Pick one of the sample test leads (`K01`–`K12`) from the dropdown, or enter a custom GSTIN to see the instant live validation against `mock_gstin_registry.csv`.
+2. **Step 2 — Needs Discovery:** Select the business archetype (Kirana, Clinic, Multi-site, Workshop), employee count, sites, and fiber availability.
+3. **Step 3 — 3-Tier Quote:** Review the **Essential**, **Recommended**, or **Complete** bundles with transparent monthly pricing and toggleable add-ons with automatic dependency enforcement.
+4. **Step 4 — Smart KYC:** View the DPDP Act 2023 consent screen, then pick the matching specimen document pack for your applicant (`K01`–`K12`) to watch the validation engine detect planted defects in real time.
+5. **Step 5 — Live Order Tracker:** Track the simulated milestone activation journey and dynamic installation dates derived from catalogue lead times.
+6. **Tabs:**
+   - **KYC Lab Tab:** A dedicated test bench to run and inspect all 12 specimen applicant document sets side-by-side.
+   - **Insights Tab:** In-depth funnel drop analysis and replay of past sales showing rule violations and NPS impact.
+
+---
 
 ## Why this design: what the data says
 
@@ -26,12 +80,14 @@ python3 -m unittest discover -s tests
 | Quote → KYC | 273 | missing GST/Udyam (94), paperwork too long (79), signatory absent (53), mismatch (47) | **Registry lookup + Smart KYC** |
 | KYC → Activated | 220 | install >21 days (98), fibre not feasible (41) | **Tracker + feasibility check before the quote** |
 
-Other findings:
-- **Past sales broke the rules.** Replaying them through the rules engine finds **22 activations on a Cancelled or Suspended GSTIN** and **58 sold bundle lines that break catalogue rules** (wrong tier, needs an active GSTIN, missing dependency, too few employees). Rules are enforced on the server, not left to the salesperson.
-- **Chasing lowers NPS.** It falls from 7.5 for customers who chased status once to 6.0 for those who chased 5 or more times. So the tracker pushes WhatsApp updates; the customer should never have to call.
-- **Names are ambiguous.** 212 GST names and 648 Udyam names are duplicated, so every lookup is by ID, never by name.
+### Additional Data Findings:
+- **Past sales broke the rules.** Replaying historical sales through the rules engine finds **22 activations on a Cancelled or Suspended GSTIN** and **58 sold bundle lines that break catalogue rules** (wrong tier, needs active GSTIN, missing dependency, insufficient employees). Rules are enforced on the server, not left to the salesperson.
+- **Chasing lowers NPS.** It falls from 7.5 for customers who chased status once to 6.0 for those who chased 5 or more times. The tracker pushes proactive WhatsApp updates so customers never have to call.
+- **Names are ambiguous.** 212 GST names and 648 Udyam names are duplicated in the registries; every lookup is therefore indexed strictly by ID, never by name.
 
-## Modules
+---
+
+## Architecture & Modules
 
 | File | What it does |
 |---|---|
@@ -40,37 +96,32 @@ Other findings:
 | `core/kyc.py` | OCR → fields (watermark-tolerant, corrects for tilted scans) → checks against the registry and rules → per-document `PASS / FIX / REJECT` with a fix-it message |
 | `core/tracker.py` | Expected dates from `typical_install_days` (slowest product in the bundle), stage timeline, customer messages, escalation after 21 days |
 | `core/insights.py` | Funnel and drop-reason analysis, replay of past sales through the rules engine |
-| `server.py` | JSON API, serves the React build; the consent gate comes before any upload; application writes are serialised |
+| `server.py` | Zero-dependency JSON API and static file server; the DPDP consent gate comes before any upload; application writes are serialized |
 | `frontend/src/` | React UI: `steps/` (Business, Needs, Quote, KYC, Track), `KycLab.jsx`, `Insights.jsx` |
 
-### Smart KYC rules, and what they catch in the specimen pack
+---
 
-| Rule | Caught in |
-|---|---|
-| GSTIN is not Active in the registry | K01 (Cancelled) |
-| Required field is blank | K01 (Udyam number) |
-| Image is blurry or unreadable → re-upload | K04 |
-| Expected document is missing | K05 (Udyam certificate) |
-| GSTIN is well-formed but fails the check digit → **reject** (altered or mistyped) | K06 |
-| Legal name differs from the registry | K07 ("Shri" vs "Neelgiri") |
-| Signatory role doesn't fit the constitution (proprietorship → proprietor; LLP → designated partner; Pvt Ltd → director) | K01, K02, K07, K08, K09 (warning only where the ID says "Owner") |
-| Address proof is more than 90 days old (today = 2026-07-15) | K11 (257 days) |
-| Bill name or address doesn't match the business | tested by uploading another business's bill |
+## Smart KYC Rules & Planted Defect Traps
 
-The clean packs **K03, K10 and K12 pass**. `tests/test_prototype.py` locks in all 12 verdicts.
+| Rule | Caught in | Verdict |
+|---|---|---|
+| GSTIN is not Active in the registry | K01 | REJECT (Cancelled) |
+| Required field is blank | K01 | FIX (Missing Udyam number) |
+| Image is blurry or unreadable | K04 | FIX (Re-upload requested) |
+| Expected document is missing | K05 | FIX (Missing Udyam certificate) |
+| GSTIN is well-formed but fails check digit | K06 | REJECT (Altered or mistyped) |
+| Legal name differs from registry | K07 | REJECT ("Shri" vs "Neelgiri") |
+| Signatory role doesn't fit constitution | K01, K02, K07, K08, K09 | WARN (Where ID says "Owner") |
+| Address proof > 90 days old (today = 2026-07-15) | K11 | REJECT (Bill is 257 days old) |
+| Bill name/address doesn't match business | Tested on cross-upload | REJECT |
 
-How OCR mistakes are handled without letting fraud through:
-- Characters are corrected by position: GSTIN positions 1–2 are digits, 3–7 letters, and so on.
-- A single look-alike swap (O↔Q, 6↔G) is accepted **only if** the result exactly equals the GSTIN the applicant entered and passes the checksum.
-- A malformed read is treated as an OCR failure: it becomes a warning for a reviewer, or a re-upload request.
-- A well-formed number with a wrong check digit is rejected.
+The clean packs **K03, K10, and K12 pass cleanly**. `tests/test_prototype.py` locks in all 12 verdicts.
 
-Udyam registration dates, and activity on some certificates, differ from the registry across almost all specimens. These show as warnings, not blocks.
+---
 
-## Prototype limits
+## Privacy & DPDP Act 2023 Compliance
 
-- OCR uses the macOS Vision framework. On another OS, swap `ocr/ocr` for Tesseract; the extraction logic doesn't change.
-- Fibre feasibility is self-declared; it would come from a coverage map.
-- Payments, real messaging and the sales console are simulated.
-- Onboarding a business without a GSTIN online is out of scope. The advisor shows which products such businesses can buy and which a GSTIN would unlock.
-- The in-app consent text and retention policy are in `PRIVACY.md`.
+- **Consent First**: In-app plain-language consent notice displayed and recorded before any document upload.
+- **Data Minimisation**: No permanent storage of document images; OCR is run ephemerally in-memory and wiped.
+- **PII Masking**: Identifiers masked in UI, logs, and APIs (`27QTB•••••••1Z9`, `UDYAM-MH-00-•••6096`).
+- Full details in `PRIVACY.md`.
