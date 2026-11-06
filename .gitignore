@@ -1,0 +1,7 @@
+frontend/node_modules/
+.tools/
+data/app.db
+ocr/ocr
+.DS_Store
+*.pyc
+__pycache__/
